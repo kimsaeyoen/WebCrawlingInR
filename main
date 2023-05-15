@@ -1,0 +1,47 @@
+install.packages("tidyverse") #파이프 연산자나 데이터 읽기, 정리등을 위해 필요함
+install.packages("httr")
+install.packages("rvest")
+install.packages("jsonlite")
+
+library(tidyverse)
+library(httr)
+library(rvest)
+library(jsonlite)
+
+res <- GET(
+  url = 'http://ncov.mohw.go.kr',
+  path = '/bdBoardList_Real.do',
+  query = list('brdId' = '1',
+               'brdGubun' = '14')
+)
+
+print(x = res)
+class(x = res)
+
+#크롬 개발자 모드에서 표에 커서를 올려놓으면 관련 코드가 푸른색으로 뜸. 아래와 같이 가공하세요.
+tbl <- res %>%
+  read_html() %>%
+  html_node(css = 'div.data_table.mgt16 > table.num') %>%
+  html_table(fill = TRUE)
+
+tbl[, 3:4] <- tbl$`환자발생 수 (사망)` %>% 
+  str_remove_all(pattern = '[\r\n\t,]+') %>% 
+  str_split(pattern = '명\\(사망', n = 2, simplify = TRUE)
+
+colnames(x = tbl) <- c('대륙', '국가', '감염자', '사망자')
+
+tbl$ `감염자` <- str_remove(string = tbl$ `감염자`, pattern = '명')
+tbl$ `사망자` <- str_remove(string = tbl$ `사망자`, pattern = '\\)')
+
+tbl[, 3:4] <- map_df(.x = tbl[, 3:4], .f = as.numeric)
+
+getwd()
+setwd(dir = './data')
+
+#rds로 저장하기
+saveRDS(object = tbl, file = 'Corona_20220415.RDS')
+
+#엑셀로 저장하기
+install.packages("writexl")
+library(writexl)
+write_xlsx(x = tbl, path = 'Corona_20220415.xlsx')
